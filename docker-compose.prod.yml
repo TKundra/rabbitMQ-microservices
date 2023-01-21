@@ -1,0 +1,93 @@
+# YML VERSION
+version: '3'
+
+# Define all the services our book application needs
+services:
+  order-service: # node application
+    restart: always # automatically restart if the app fails
+    build: # build the image from the dockerfile present in the order-service directory
+      context: ./order-service
+      dockerfile: Dockerfile
+    image: rabbitmqburger-order-service:1.0.0
+    container_name: order-service-container
+    depends_on:
+      - mongo
+      - rabbitmq
+    environment: # environment variables
+      - PORT=3000
+      - MQ_HOST=rabbitmq
+      - MONGO_HOST=mongo # this should be the same as the name of the DB service below
+      - SLEEP_TIME=30000
+    ports: 
+      - 3000:3000 # map the ports as <host-port>:<container-port . The container-port should be the same as the PORT defined in environment.
+    networks:
+      - rabbitmqburger-network
+
+  restaurant-service: # node application
+    restart: always # automatically restart if the app fails
+    build: # build the image from the dockerfile present in the restaurant-service directory
+      context: ./restaurant-service
+      dockerfile: Dockerfile
+    image: rabbitmqburger-restaurant-service:1.0.0
+    container_name: restaurant-service-container
+    depends_on:
+      - mongo
+      - rabbitmq
+    environment: # environment variables
+      - MQ_HOST=rabbitmq
+      - MONGO_HOST=mongo # this should be the same as the name of the DB service below
+      - PREFETCH_COUNT=2 # Max orders that can be processed simultaneously
+      - SLEEP_TIME=30000
+    networks:
+      - rabbitmqburger-network
+
+  email-service: # node application
+    restart: always # automatically restart if the app fails
+    build: # build the image from the dockerfile present in the email-service directory
+      context: ./email-service
+      dockerfile: Dockerfile
+    image: rabbitmqburger-email-service:1.0.0
+    container_name: email-service-container
+    depends_on:
+      - rabbitmq
+    environment: # environment variables
+      - MQ_HOST=rabbitmq
+      - PREFETCH_COUNT=2 # Max orders that can be processed simultaneously
+      - EMAIL_FROM=
+      - SMTP_HOST=
+      - SMTP_PORT=
+      - SMTP_USER=
+      - SMTP_PASS=
+      - SLEEP_TIME=30000
+    networks:
+      - rabbitmqburger-network
+
+  mongo: # database
+    image: mongo:latest # pull the mongo image from docker hub
+    logging: 
+      driver: none # disable logging
+    ports:
+      - 27017:27017
+    networks:
+      - rabbitmqburger-network
+    volumes:
+      - rabbitmqburger-volume:/data/db
+
+  rabbitmq: # rabbitmq
+    image: rabbitmq:3-management # pull the rabbitmq image from dockerhub
+    logging: 
+      driver: none # disable logging
+    ports:
+      - 5672:5672
+      - 15672:15672
+    networks:
+      - rabbitmqburger-network
+
+networks: # telling compose to create network first then attach it to services
+  rabbitmqburger-network:
+
+volumes: # telling compose to create volume first then mount to services
+  rabbitmqburger-volume:
+
+# docker compose up
+# docker compose -f docker-compose.prod.yml up
